@@ -1,0 +1,161 @@
+#!/bin/bash 
+
+## TAKING CARE OF ERROR CODES WITH ARGUMENTS PRIMARILY
+# ERRORS WITH FILE NAMES/PERMS will be dealt with in the loop itself.
+
+argsExitStatus=0
+
+# ERROR #1 -> INCORRECT NUM of arguments -> EXIT IMMEDIETLY
+
+if [ $# -ne 2 ]; then
+	echo "Incorrect NUM of arguments. Usage -> ./runSuite testSuite ./myProgram" >&2
+	exit 1
+fi
+
+# ERROR #2 -> TESTSUITE FILE IS UNREADABLE/DOES NOT EXIST
+
+if [ ! -e ${1} ]; then
+	echo "testSuite file ${1} does not exist in given directory" >&2
+	argsExitStatus=$((argsExitStatus+1))
+
+elif [ ! -r ${1} ]; then
+	echo "testSuite file ${1} is unreadable" >&2
+	argsExitStatus=$((argsExitStatus+1))
+	
+fi
+
+# ERROR #3 -> PROGRAM FILE IS UNEXECUTABLE/DOES NOT EXIST
+
+if [ ! -e ${2} ]; then
+	echo "Provided program file ${2} does not exist in given directory" >&2
+	argsExitStatus=$((argsExitStatus+1))
+
+elif [ ! -x ${2} ]; then
+	echo "Provided program file ${2} is not executable" >&2
+	argsExitStatus=$((argsExitStatus+1))
+fi
+
+
+
+
+if [ $argsExitStatus -ne 0 ]; then
+	exit $argsExitStatus
+fi
+
+#### ERRORS TO WORRY ABOUT IN LOOP -> .args files are not readable/DNE, .out files are not readable/DNE
+#### ERRORS THAT ARE OK -> .args file has no command, then the program will run with 0 arguments. 
+##                      -> Program recieves incorrect input (words for a math program). Not tested.
+
+exitStatTotal=0
+
+for file in $(cat ${1}); do
+
+	exitStat=0
+
+
+	if [ ! -r ${file}.out ]; then
+		echo "File ${file}.out does not exist or is not readable." >&2
+		exit $((exitStat+1))
+
+
+	fi
+
+ 
+	if [ -e ${file}.args -a ! -r ${file}.args ]; then
+		echo "${file}.args is not readable" >&2
+		exitStat=$((exitStat+1))		
+
+	fi
+
+
+	if [ -e ${file}.in -a ! -r ${file}.in ]; then
+			echo "${file}.in is not readable" >&2
+			exitStat=$((exitStat+1))
+
+	fi
+
+
+
+	if [ $exitStat -ne 0 ]; then
+		exitStatTotal=$((exitStatTotal+exitStat))
+		continue
+	fi
+
+### DONE WITH ALL POSSIBLE ERROR MSGS, NOW WE ASSUME ARGS WORK, OUTS EXIST, TESTSUITE and PROGRAM WORK/READABLE/EXECUTABLE, ETC. THE REAL PROGRAM BEGINS BELOW ->
+
+tmpfile="$(mktemp /tmp/XXX.txt)"
+
+	if [  -e ${file}.args  -a  -e ${file}.in  ]; then
+		./${2} $(cat ${file}.args) < ${file}.in > ${tmpfile}
+
+	elif [ ! -e ${file}.args -a -e ${file}.in ]; then
+ 		./${2} < ${file}.in > ${tmpfile}
+
+	elif [ -e ${file}.args -a ! -e ${file}.in ]; then
+		./${2} $(cat ${file}.args) > ${tmpfile}
+
+	else 
+		./${2} > ${tmpfile}
+
+	fi		
+	
+
+
+	if [ "$(cat ${tmpfile})" = "$(cat ${file}.out)" ]; then
+		continue
+		## THIS MEANS THAT PRODUCED = EXPECTED
+
+	else 	
+		echo "Test failed: ${file}"
+		echo "Args:"
+
+			if [ -r ${file}.args ]; then	
+				echo "$(cat ${file}.args)"
+			fi
+
+		echo "Input:"
+			
+			if [ -r ${file}.in ]; then
+				echo "$(cat ${file}.in)"
+			fi
+
+		echo "Expected:"
+
+			echo "$(cat ${file}.out)"
+
+		echo "Actual:"
+
+			if [ ! "$(cat ${tmpfile})" = "" ]; then 
+				echo "$(cat ${tmpfile})"
+			
+			fi
+		
+	fi
+
+		rm $tmpfile
+
+
+	
+	done
+
+
+
+exit $exitStatTotal
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

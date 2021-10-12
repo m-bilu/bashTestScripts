@@ -1,0 +1,123 @@
+#!/bin/bash
+
+
+## TAKING CARE OF ERROR CODES WITH ARGUMENTS PRIMARILY
+# ERRORS WITH FILE NAMES/PERMS will be dealt with in the loop itself.
+
+argsExitStatus=0
+
+# ERROR #1 -> INCORRECT NUM of arguments -> EXIT IMMEDIETLY
+
+if [ $# -ne 2 ]; then
+	echo "Incorrect NUM of arguments. Usage -> ./produceOutputs testSuite ./myProgram" >&2
+	exit 1
+fi
+
+# ERROR #2 -> TESTSUITE FILE IS UNREADABLE/DOES NOT EXIST
+
+if [ ! -f ${1} ]; then
+	echo "testSuite file ${1} does not exist in given directory" >&2
+	argsExitStatus=$((argsExitStatus+1))
+
+elif [ ! -r ${1} ]; then
+	echo "testSuite file ${1} is unreadable" >&2
+	argsExitStatus=$((argsExitStatus+1))
+	
+fi
+
+# ERROR #3 -> PROGRAM FILE IS UNEXECUTABLE/DOES NOT EXIST
+
+if [ ! -f ${2} ]; then
+	echo "Provided program file ${2} does not exist in given directory" >&2
+	argsExitStatus=$((argsExitStatus+1))
+
+elif [ ! -x ${2} ]; then
+	echo "Provided program file ${2} is not executable" >&2
+	argsExitStatus=$((argsExitStatus+1))
+fi
+
+
+
+
+if [ $argsExitStatus -ne 0 ]; then
+	exit $argsExitStatus
+fi
+
+#### ERRORS TO WORRY ABOUT IN LOOP -> .args/.in files are given BUT not readable/DNE, .out files are not writable
+#					In this case, skip test, move to next, leave error code
+###                                -> .in file doesn't exist
+#					Then do normal .args execution NO ERROR CODE
+###                                -> .in exists, .args does not
+#					Then use .in file as argument only NO ERROR CODE
+###				   -> If neither exist, run program with nothing
+#### ERRORS THAT ARE OK -> .args file has no command, then the program will run with 0 arguments. 
+##                      -> Program recieves incorrect input (words for a math program, segfault). Not tested
+
+exitStat=0
+
+for file in $(cat $1); do
+
+skipStat=0
+
+	if [ -f ${file}.args ]; then
+		
+		if [ ! -r ${file}.args ]; then
+			echo "${file}.args is not readable" >&2
+			exitStat=$((exitStat+1))
+			skipStat=$((skipStat+1))
+		fi
+
+	fi
+
+	if [ -f ${file}.in ]; then
+		
+		if [ ! -r ${file}.in ]; then
+			echo "${file}.in is not readable" >&2
+			exitStat=$((exitStat+1))
+                	skipStat=$((skipStat+1))
+
+		fi
+
+	fi
+
+	if [ -f ${file}.out ]; then
+		
+		if [ ! -w ${file}.out ]; then
+			echo "${file}.out is not writable" >&2
+			exitStat=$((exitStat+1))
+			skipStat=$((skipStat+1))
+
+		fi
+
+	fi
+
+	if [ $skipStat -ne 0 ]; then
+		continue
+	fi
+
+	## ALL POSSIBLE ERRORS WITH THE CONTENTS OF .ARGS, .OUT, .IN FILES ARE COVERED. NOW, TIME FOR ACTUAL PROGRAM
+
+	if [ ! -f ${file}.args -a -f ${file}.in ]; then
+		
+		./${2} < ${file}.in > ${file}.out
+
+	elif [ ! -f ${file}.in -a -f ${file}.args ]; then
+		
+		./${2} $(cat ${file}.args) > ${file}.out
+
+	elif [ ! -f ${file}.args -a ! -f ${file}.in ]; then
+		
+		./${2} > ${file}.out
+
+	else
+		./${2} $(cat ${file}.args) < ${file}.in > ${file}.out
+	fi
+
+
+done
+
+exit $exitStat
+
+
+
+
